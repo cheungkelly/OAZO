@@ -1,0 +1,22 @@
+{let {empty <- 15}
+  {let {empty? <- {anon (x) : {equal? x empty}}}
+    {cons <- {anon {f r} :
+                   {anon {key} :
+                         {if {equal? key 0}
+                             then
+                             f
+                             else
+                             r}}}}
+    {first <- {anon {pair} :
+                    {pair 0}}}
+    {rest <- {anon {pair} :
+                   {pair 1}}}
+    {let {sum-list <- {anon (l self) :
+                            {if {empty? l}
+                                then
+                                0
+                                else
+                                {+ {first l}
+                                   {self {rest l} self}}}}}
+      {my-list <- {cons 3 {cons 24 {cons 8 empty}}}}
+      {println {++ "The sum of the list is " {sum-list my-list sum-list} "."}}}}}

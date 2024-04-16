@@ -1,0 +1,37 @@
+{let {health <- 100} ; Start with 100 health points
+ {seq
+  {println "You're in the middle of a zombie apocalypse at Cal Poly! Quick! Your phone is at what percent?"}
+  {let [percent <- {read-num}]
+    {seq {println {++ "Oh, your phone is at " percent "%?"}}
+         {if (<= percent 15)
+             then {seq {println "Wow, how unfortunate. Did you forget to charge?"}
+                       {set! health (- health 10)}} ; Decrease health by 10
+             else {seq {println {++ "That's what you may have thought, but you forget, you fell asleep watching TikTok last night. So it's actually dead."}}
+                       {set! health (- health 5)}} ; Decrease health by 5 because the phone is dead
+         }
+    }
+  }
+  {println {++ "You now have " health " health left."}} ; Show the player their current health
+  {println "Be fast! Someone's unlocking the classroom door! It sounds like your classmate! Type 1 to open the door or 2 to lock it."}
+  {let [pick <- {read-num}]
+    {if {equal? pick 1}
+        then {seq {println "Your classmate thanks you and is very grateful. But, they're kind of twitching strangely..."}
+                  {println "They suddenly ask you to come over and see what they salvaged from the Cal Poly Bookstore. You are conveniently placed near an open window for escape."}
+                  {println "Type 1 if you're curious or 2 to escape through the window."}
+                  {let [pick2 <- {read-num}]
+                    {if {equal? pick2 1}
+                        then {seq {println "Not smart. They bite you and you die!"}
+                                  {set! health 0}} ; Player dies, health is set to 0
+                        else {seq {println "You lived to see another day!"}
+                                  {set! health (- health 5)}} ; Decrease health by 5 for the stress of the situation
+                    }
+                  }
+             }
+        else {seq {println "You locked the door. You hear them yell and run away to try another classroom."}
+                  {set! health (- health 2)}} ; Decrease health by 2 for the fear
+    }
+  }
+  {println {++ "Your final health is " health "."}} ; Show the player their final health
+ }
+}
+

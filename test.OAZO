@@ -1,0 +1,50 @@
+{seq
+ {let [health <- 100] [decrease-health <- {anon {h} : {- h 25}}]
+    {seq {println "You're in the middle of a zombie apocalypse at Cal Poly! Quick! Your phone is at what percent?"}
+   {let [percent <- {read-num}]
+     {seq {println {++ "Oh, your phone is at " percent "%?"}}
+          {if (<= percent 15)
+              then {println "Wow, how unfortunate. Did you forget to charge?"}
+              else {println "That's great! That amount might just last you through this whole game..."}}
+          {println "Be fast! Someone's unlocking the classroom door! It sounds like your classmate! Type 1 to open the door or 2 to lock it."}
+          {let [pick <- {read-num}]
+            {if {equal? pick 1}
+                then {seq {println "Your classmate thanks you and is very grateful. But, they're kind of twitching strangely..."}
+                          {println "They suddenly ask you to come over and see what they salvaged from the Cal Poly Bookstore."}
+                          {println "You're starving. You are also conveniently placed near an open window for escape."}
+                          {println {++ "HEALTH: " {decrease-health health}}}
+                          {println "Type 1 to satiate your hunger or 2 to escape through the window."}
+                          {let [pick2 <- {read-num}]
+                            {if {equal? pick2 1}
+                                then {seq {println "Not smart. They take that chance to bite you!"}
+                                          {println "Your phone has no battery, and you are too weak to get to the window. You succumb to the bite..."}
+                                          {println {++ "HEALTH: " {decrease-health {decrease-health {decrease-health health}}}}}
+                                          {println "GAME OVER."}}
+                                else {seq {println "You sprint to the window but stumble on your way out. You scrape your knees in a rush."}
+                                          {println {++ "HEALTH: " {decrease-health health}}}
+                                          {println "You run and run but reach a dilemma. Type 1 to run out of campus to safety or 2 to find an outlet to charge your phone."}
+                                          {let [pick3 <- {read-num}]
+                                            {if {equal? pick3 1}
+                                                then {seq {println "You live to see another day! But at the cost of your friends who are still in Cal Poly..."}
+                                                          {println "GAME END."}}
+                                                else {seq {println "You attempt to find an outlet but someone attacks you! You never saw it coming."}
+                                                          {println "You are brutually mauled by the zombie Cal Poly student, with nothing to defend yourself and weak from hunger."}
+                                                          {println {++ "HEALTH: " {decrease-health {decrease-health {decrease-health health}}}}}
+                                                          {println "Unfortunately you succumb to the wounds as you failed to fight them off."}
+                                                          {println "GAME OVER."}}}}}}}}
+                else {seq {println "You locked the door. You hear them yell and run away to try another classroom."}
+                          {if {<= percent 15}
+                              then {seq {println "Your phone is dead and there is no outlet. You stay put and wait for help. But you end up waiting forever... no one comes so you die!"}
+                                        {println "GAME OVER."}}
+                              else {seq {println "Your phone buzzes. It's your friend who's nearby! They are very distressed. Type 1 to go look for them or 2 to stay put."}
+                                        {let [pick4 <- {read-num}]
+                                          {if (equal? pick4 1)
+                                              then {seq {println "The only way out is the window next to you, without the risk of running into the person you didn't let in."}
+                                                        {println "You sprint to the window but stumble on your way out. You scrape your knees in a rush."}
+                                                        {println {++ "HEALTH: " {decrease-health health}}}
+                                                        {println "You find them intact and safe. Both of you have not been bitten!"}
+                                                        {println "With the power of friendship and a not-dead phone you both work together to escape Cal Poly and succeed."}
+                                                        {println "GAME END."}}
+                                              else {seq {println "You stay put and wait for help. But you end up waiting forever... no one comes so you die!"}
+                                                        {println "GAME END."}}}}}}}}}}}}}}
+

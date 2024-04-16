@@ -1,0 +1,249 @@
+#lang typed/racket
+
+(require typed/rackunit)
+
+
+;; ExprC ::= num
+;;        | {+ ExprC ExprC}
+;;        | {- ExprC ExprC}
+;;        | {* ExprC ExprC}
+;;        | {/ ExprC ExprC}
+;;        | {id ExprC ...}
+;;        | {ifleq0? ExprC ExprC ExprC}
+;;        | id
+
+(define-type ExprC (U NumC BinopC AppC Ifleq0C IdC))
+(struct NumC ([n : Real]) #:transparent)
+(struct BinopC ([op : Symbol][l : ExprC][r : ExprC]) #:transparent)
+(struct AppC ([fun : Symbol][args : (Listof ExprC)]) #:transparent)
+(struct Ifleq0C ([test : ExprC][then : ExprC][else : ExprC]) #:transparent)
+(struct IdC ([name : Symbol]) #:transparent)
+
+
+;; Function definition
+;; <fundef> ::= {func {IdC IdC ...} : ExprC}
+(struct FundefC ([name : Symbol][args : (Listof Symbol)][body : ExprC]) #:transparent)
+
+
+;; —————————————————————————————————
+;; implementation
+
+;; determines if a given Sexp is an ExprC
+(define (ExprC? x)
+  (or (NumC? x)
+      (BinopC? x)
+      (AppC? x)
+      (Ifleq0C? x)
+      (IdC? x)))
+
+
+;; checks if symbol is an operator
+;; parameter: op : Symbol
+;; returns: Boolean
+(define (invalid-id? [op : Symbol]) : Boolean
+  (match op
+    ['+ #t]
+    ['- #t]
+    ['/ #t] 
+    ['* #t]
+    ['func #t]
+    ['ifleq0? #t]
+    [': #t]
+    [other #f]))
+
+
+;; combines parsing and evaluation
+;; parameter: fun-sexps : Sexp
+;; returns: Real
+(define (top-interp [fun-sexps : Sexp]) : Real
+  (interp-fns (parse-prog fun-sexps)))
+
+
+;; takes a list of FundefCs and interprets the function named "main"
+;; parameter: funs : (Listof FundefC)
+;; returns: Real 
+(define (interp-fns [funs : (Listof FundefC)]) : Real
+  (match (get-fundef 'main funs)
+    [(? FundefC? main-fundef) 
+     (interp (FundefC-body main-fundef) funs)]))
+
+;; find a function definition by name in the list of FundefCs and returns the FundefC if found, otherwise #f
+;; parameters: name : Symbol, funs : (Listof FundefC)
+;; returns: (U False FundefC)
+(define (get-fundef [name : Symbol] [funs : (Listof FundefC)]) : FundefC
+  (cond
+    [(empty? funs) (error "OAZO Function not found")]
+    [(equal? (FundefC-name (first funs)) name) (first funs)]
+    [else (get-fundef name (rest funs))]))
+
+
+;; takes two lists and returns a list of elements that is a list of the corresponding elements of each
+;; parameters: list1, list2 (Listof Real)
+;; returns: (Listof (List Real Real))
+;; IF LISTS ARE DIFFERENT LENGTHS THEN ERROR 
+(define (zip [list1 : (Listof ExprC)]
+             [list2 : (Listof Symbol)]) : (Listof (List ExprC Symbol))
+  ; checks if either list is empty (zip to the shortest list)
+  (if (or (empty? list1) (empty? list2))
+      '()
+      (cons (list (first list1) (first list2))
+            (zip (rest list1) (rest list2)))))
+
+
+;; searches for a symbol in the second element of a list inside another list
+;; parameters: lst : (Listof (List ExprC Symbol)), sym : Symbol
+;; returns: (U ExprC Boolean)
+(define (search-sym [lst : (Listof (List ExprC Symbol))] [sym : Symbol]) : (U Boolean ExprC)
+  (cond
+    [(empty? lst) #f]
+    [(equal? (first (rest (first lst))) sym) (first (first lst))]
+    [else (search-sym (rest lst) sym)]))
+
+;; tests
+(check-equal? (search-sym (list (list (NumC 2) 'x) (list (NumC 3) 'y)) 'y) (NumC 3))
+(check-equal? (search-sym (list (list (NumC 3) 'q)) 'a) #f)
+(check-equal? (search-sym (list (list (NumC 4) 'x) (list (NumC 5) 'y)) 'x) (NumC 4))
+
+
+;; substitutes a given symbol (for) with a value (what) located in (in)
+;; parameters: what, in : ExprC; for : Symbol
+;; returns: ExprC
+(define (subst [what : (Listof ExprC)] [for : (Listof Symbol)] [in : ExprC]) : ExprC
+ (define zipped (zip what for))
+  (match in
+    [(NumC n) in]
+    [(IdC s) (if (member s for)
+                 (match (search-sym zipped s)
+                   [(? ExprC? result) result]
+                   [other (error 'subst "OAZO No Given Value for Argument: ~e") other]) in)]
+    [(AppC f a) (AppC f (map (lambda ([arg : ExprC]) (subst what for arg)) a))]
+    [(BinopC op l r) (BinopC op (subst what for l) (subst what for r))]
+    [(Ifleq0C test then else) (Ifleq0C (subst what for test)
+                                       (subst what for then)
+                                       (subst what for else))]))
+
+
+;; tests
+(check-equal? (subst (list (NumC 1) (NumC 3)) '(x y) (BinopC '+ (IdC 'x) (IdC 'y))) (BinopC '+ (NumC 1) (NumC 3)))
+(check-equal? (subst '() '() (BinopC '+ (NumC 1) (NumC 2))) (BinopC '+ (NumC 1) (NumC 2)))
+(check-equal? (subst (list (NumC 2)) '(x) (IdC 'x)) (NumC 2))
+(check-equal? (subst (list (IdC 'z)) '(y) (AppC 'f (list (IdC 'y))))(AppC 'f (list (IdC 'z))))
+(check-equal? (subst (list (NumC 4) (NumC 5)) '(x y) (BinopC '+ (IdC 'y) (IdC 'x))) (BinopC '+ (NumC 5) (NumC 4)))
+
+
+;; maps binop expression for interpretation
+;; parameters: op : Symbol; l, r : Real
+;; returns: Real
+(define (interpret-binop [op : Symbol] [l : Real] [r : Real]) : Real 
+  (match op
+    ['+ (+ l r)]
+    ['- (- l r)]
+    ['* (* l r)]
+    ['/ (if (= r 0) (error 'interp "OAZO Division by zero") (/ l r))]
+    [other (error 'interp "OAZO Unsupported binary operator: ~e" other)]))
+
+
+;; gives meaning to the ExprC language
+;; parameter: a : ExprC, fundefs : Listof FundefC
+;; returns: Real
+(define (interp [exp : ExprC] [funs : (Listof FundefC)]) : Real
+  (match exp
+    [(NumC n) n]
+    [(BinopC op l r) (interpret-binop op (interp l funs) (interp r funs))]
+    [(Ifleq0C test then else) (if (<= (interp test funs) 0)
+                                 (interp then funs)
+                                 (interp else funs))]
+    [(AppC f a) (define fun (get-fundef f funs))
+                ; (map (lambda ([arg : ExprC]) (interp arg (list (FundefC 'f '(x) (IdC 'x))))) (list (NumC 3)))
+                ;; wrap in NumC
+                ;; if (equal? length of interp arguments, length of arguments in function funs??
+                ;; FundefC-arg fun and length interp-args
+                (define interped-args (map (lambda ([arg : ExprC]) (interp arg funs)) a))
+                (if (equal? (length interped-args) (length (FundefC-args fun)))
+                    (interp (subst (map (lambda ([n : Real]) (NumC n)) interped-args)
+                               (FundefC-args fun)
+                               (FundefC-body fun)) funs)
+                    (error 'interp "OAZO Wrong arity"))]
+    [(IdC name) (error 'interp "OAZO Undefined IdC")]))
+
+;; test
+(check-equal? (interp (NumC 42) '())42)
+(check-equal? (interp (AppC 'f (list (NumC 3))) (list (FundefC 'f '(x) (BinopC '+ (IdC 'x) (NumC 3))))) 6)
+(check-equal? (interp (BinopC '+ (NumC 2) (NumC 3)) '()) 5)
+(check-equal? (interp (Ifleq0C (NumC -1) (NumC 10) (NumC 20)) '()) 10)
+(check-equal? (interp (Ifleq0C (NumC 0) (NumC 10) (NumC 20)) '()) 10)
+(check-equal? (interp (Ifleq0C (NumC 1) (NumC 10) (NumC 20)) '()) 20)
+
+
+;; parses an expression
+;; parameter: s : Sexp
+;; returns: ExprC
+(define (parse [s : Sexp]) : ExprC
+  (match s
+    [(? real? n) (NumC n)]
+    [(? symbol? id) (if (not (invalid-id? id)) (IdC id) (error 'parse "OAZO Invalid Id Syntax for IdC"))]
+    [(list '+ l r) (BinopC '+ (parse l) (parse r))]
+    [(list '* l r) (BinopC '* (parse l) (parse r))]
+    [(list '- l r) (BinopC '- (parse l) (parse r))]
+    [(list '/ l r) (BinopC '/ (parse l) (parse r))]
+    [(list 'ifleq0? test then else) (Ifleq0C (parse test) (parse then) (parse else))]
+    [(list (? symbol? fun) arg ...) (if (not (invalid-id? fun)) (if (empty? arg) (AppC fun '()) (AppC fun (map parse arg)))
+                                        (error 'parse "OAZO Invalid Id Syntax for AppC"))]
+    [other (error 'parse "OAZO Expr Syntax Error: ~e" other)]))
+
+
+;; tests
+(check-equal? (parse '{f 2}) (AppC 'f (list (NumC 2))))
+(check-equal? (parse '{f}) (AppC 'f '()))
+(check-equal? (parse '{f 3 4 5 6 7}) (AppC 'f (list (NumC 3) (NumC 4) (NumC 5) (NumC 6) (NumC 7))))
+(check-equal? (parse 'x) (IdC 'x))
+(check-equal? (parse '{+ 1 2}) (BinopC '+ (NumC 1) (NumC 2)))
+
+
+;; parse-prog takes Sexp
+;; parameter: s : Sexp
+;; returns: Listof Fundefc
+;; NEED TO CHECK FOR DUPLICATE FUNCTION NAMES
+(define (parse-prog [s : Sexp]) : (Listof FundefC)
+  (match s
+    [(cons f r) (cons (parse-fundef f) (parse-prog r))]
+    ['() '()]
+    [other (error 'parse-prog "OAZO: Invalid argument ~e" other)]))
+
+
+;; parses a function definition
+;; parameter: s : Sexp
+;; returns: FundefC
+(define (parse-fundef [s : Sexp]) : FundefC
+  (match s
+    [(list 'func (list (? symbol? name) (? symbol? args) ...) ': body)
+     (if (and (not (invalid-id? name))             
+              (not (ormap (lambda (a) (invalid-id? a)) (cast args (Listof Symbol))))
+              ((lambda (lst) (equal? lst (remove-duplicates lst))) (cast args (Listof Symbol))))
+         (FundefC name (cast args (Listof Symbol)) (parse body))
+         (error 'parse-fundef "OAZO Invalid Id Syntax for FundefC"))]
+    [other (error 'parse-fundef "OAZO Func Syntax Error ~e" other)]))
+
+;; tests
+(check-equal? (parse-fundef '{func {f x} : {+ x 2}}) (FundefC 'f '(x) (BinopC '+ (IdC 'x) (NumC 2))))
+(check-equal? (parse-fundef '(func (f x) : (+ x 1)))(FundefC 'f (list 'x) (BinopC '+ (IdC 'x) (NumC 1))))
+(check-equal? (parse-fundef '(func {f} : {+ 1 2})) (FundefC 'f '() (BinopC '+ (NumC 1) (NumC 2))))
+(check-equal? (parse-fundef '(func {f x y} : {+ x y})) (FundefC 'f '(x y) (BinopC '+ (IdC 'x) (IdC 'y))))
+(check-equal? (parse-fundef '(func {f x y z} : {+ x y})) (FundefC 'f '(x y z) (BinopC '+ (IdC 'x) (IdC 'y))))
+(check-equal? (parse-fundef '{func {f x y} : x}) (FundefC 'f '(x y) (IdC 'x)))
+(check-exn #rx"OAZO Invalid Id Syntax for FundefC" (lambda () (parse-fundef '{func {+ -} : {+ - 2}})))
+(check-exn #rx"OAZO Invalid Id Syntax for FundefC" (lambda () (parse-fundef '{func {my-fun -} : {+ - 2}})))
+(check-exn #rx"OAZO Invalid Id Syntax for FundefC" (lambda () (parse-fundef '{func {my-fun x y -} : {+ x 2}})))
+(check-exn #rx"OAZO Invalid Id Syntax for FundefC" (lambda () (parse-fundef '{func {my-fun x x x} : {+ x x}})))
+
+
+;; —————————————————————————————————
+;; tests
+
+(check-equal? (interp-fns
+        (parse-prog '{{func {f} : 5}
+                      {func {main} : {+ {f} {f}}}}))
+       10)
+(check-equal? (top-interp '{{func {minus-five x} : {+ x {* -1 5}}} {func {main} : {minus-five {+ 8 2}}}}) 5)
+
+

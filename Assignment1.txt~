@@ -1,0 +1,10 @@
+#lang scribble/manual
+
+Question 1:
+Three features including: Lisp Macros, allowing program-level manipulation, lexical closures for function factories and state management, and rest parameters for flexible argument handling, provided Viaweb a strategic edge in software development through enhanced abstraction, flexibility, and expressiveness. 
+
+Question 2: 
+Graham emphasizes choosing the most powerful programming language for efficiency and capability, and highlights the Blub Paradox, showing how programmers' language assessments are limited by their current knowledge. 
+
+Question 3:
+When evaluating a new programming language, consider its target audience, assess the extent and nature of its marketing, and seek opinions from experienced programmers.

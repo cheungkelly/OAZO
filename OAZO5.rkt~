@@ -1,0 +1,113 @@
+#lang typed/racket
+(require typed/rackunit)
+
+
+;; Expr	 	=	 	Num
+;; 	 	|	 	id
+;; 	 	|	 	String
+;; 	 	|	 	{if Expr then Expr else Expr}
+;; 	 	|	 	{let [id <- Expr] ... Expr}
+;; 	 	|	 	{anon {id ...} Expr}
+;; 	 	|	 	{Expr Expr ...}
+
+(struct NumC ([n : Real]) #:transparent)
+(struct IdC ([name : Symbol]) #:transparent)
+(struct StringC ([str : String]) #:transparent)
+(struct IfC ([test : ExprC] [then : ExprC] [else : ExprC]) #:transparent)
+(struct LetC ([bindings : (Listof (Pair Symbol ExprC))] [body : ExprC]) #:transparent)
+(struct AnonC ([params : (Listof Symbol)] [body : ExprC]) #:transparent)
+(struct AppC ([operator : ExprC] [operands : (Listof ExprC)]) #:transparent)
+
+(define-type ExprC (U NumC IdC StringC IfC LetC AnonC AppC))
+
+(struct Binding ((name : Symbol) (val : Real)))
+(define-type Env (Listof Binding))
+(define mt-env '())
+(define extend-env cons)
+
+
+
+(struct BoolV([n : Boolean]) #:transparent)
+(struct NumV([n : Real]) #:transparent)
+(struct StrV([n : String]) #:transparent)
+(struct CloV([args : (Listof IdC)] [body : ExprC] [env : Env]) #:transparent)
+(struct PrimV([n : (U (-> (Listof Value) Value) (-> (Listof Value) Nothing))]) #:transparent)
+
+(define-type Value (U BoolV NumV StrV CloV PrimV))
+
+
+(define (lookup [name : IdC] [env : Env]) : Value
+  (match env
+    [(list) (error "OAZO" "name not found")]
+    [(list (cons (Binding n v) r))
+     (if (equal? n name) v (lookup name r))]))
+
+
+
+;; —————————————————————————————————
+;; implementation
+
+;; Top level env
+
+(define (top-add [args : (Listof Value)]) : NumV
+  (match args
+    [(list (NumV a) (NumV b)) (NumV (+ a b))]
+    [else (error "OAZO add operation expects two numbers")]))
+
+(define (top-subtract [args : (Listof Value)]) : NumV
+  (match args
+    [(list (NumV a) (NumV b)) (NumV (- a b))]
+    [else (error "OAZO sub operation expects two numbers")]))
+
+(define (top-mult [args : (Listof Value)]) : NumV
+  (match args
+    [(list (NumV a) (NumV b)) 
+     (NumV (* a b))]
+    [else (error "OAZO mult operation expects two numbers")]))
+
+(define (top-div [args : (Listof Value)]) : NumV
+  (match args
+    [(list (NumV a) (NumV b))
+     (NumV (/ a b))]
+    [else (error "OAZO div operation expects two numbers")]))
+ 
+(define (top-leq? [args : (Listof Value)]) : BoolV
+  (match args
+    [(list (NumV a) (NumV b)) 
+     (BoolV (<= a b))]
+    [else (error "OAZO leq expects two numbers")]))
+
+(define (top-Equal? [args : (Listof Value)]) : Value
+  (match args
+    [(list (NumV a)(NumV b))
+     (BoolV (equal? a b))]
+    [else (error "OAZO eq expects two numbers")]))
+
+
+
+
+
+(check-equal? (top-add (list (NumV -2) (NumV 4))) (NumV 2))
+(check-equal? (top-subtract (list (NumV -2) (NumV 4))) (NumV -6))
+(check-equal? (top-mult (list (NumV -2) (NumV 4))) (NumV -8))
+(check-equal? (top-div (list (NumV -2) (NumV 1))) (NumV -2))
+(check-equal?(top-leq? (list(NumV 2)(NumV 3)))(BoolV #t))
+(check-equal?(top-Equal? (list(NumV 2)(NumV 2)))(BoolV #t))
+(check-exn #rx"OAZO sub operation expects two numbers"(lambda ()(top-subtract(list(NumV 5)))))
+(check-exn #rx"OAZO add operation expects two numbers" (lambda ()(top-add(list(NumV 1)(BoolV #t)))))
+(check-exn #rx"OAZO mult operation expects two numbers" (lambda ()(top-mult(list(BoolV #t)))))
+(check-exn #rx"OAZO div operation expects two numbers" (lambda ()(top-div(list(BoolV #f)(NumV 5)))))
+(check-exn #rx"OAZO leq expects two numbers"(lambda()(top-leq?(list(BoolV #f)))))
+(check-exn #rx"OAZO eq expects two numbers"(lambda()(top-Equal?(list(BoolV #f)))))
+
+
+
+
+
+
+
+;(define (top-interp [s : Sexp]) : String
+;  (serialize (interp (parse s) top-env)))
+
+
+

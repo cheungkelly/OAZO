@@ -1,0 +1,163 @@
+#lang typed/racket
+(require typed/rackunit)
+
+
+
+;; Q1
+;; Purpose: To take a list of strings and return a single string
+;; combining the elements in reverse order.
+;;
+;; Type: (Listof String) -> String
+(define (rev-str-app [lst : (Listof String)]) : String
+  (define (loop [lst : (Listof String)] [acc : String]) : String
+    (cond
+      [(empty? lst) acc]
+      [else (loop (rest lst) (string-append (first lst) acc))]))
+  (loop lst ""))
+
+;; Tests
+(module+ test
+  (check-equal? (rev-str-app '("ball" "juice" "frog")) "frogjuiceball")
+  (check-equal? (rev-str-app '()) "")
+  (check-equal? (rev-str-app '("a" "b" "c")) "cba"))
+
+;; List template (commented out as per requirement)
+#;
+(define (template-for-list-of-string [lst : (Listof String)]) : (.../...))
+
+
+
+;; Q2
+;; rev-str-app Explanation:
+;; The type of `rev-str-app` is likely to be (Listof String) -> String.
+;; This makes sense because the function is designed to take a list of strings
+;; and concatenate them into a single string in reverse order.
+
+;; + Operator Explanation:
+;; The type of `+` might be quite long and complex, for example:
+;; (-> Real Real) or (-> Integer Integer) or ...
+;; The reason for this complexity is that `+` is a polymorphic function in Typed Racket.
+;; It can operate on various numeric types (e.g., integers, real numbers, complex numbers),
+;; and its type signature reflects all these possible combinations.
+;; Each combination of numeric types that `+` can operate on is represented in its type.
+
+
+;; Q3
+
+;; Define structs for each type of bicycle with a type annotation for the num-wheels field
+(define-struct: Trek ([num-wheels : Number]))
+(define-struct: Bianchi ([num-wheels : Number]))
+(define-struct: Gunnar ([num-wheels : Number]))
+
+;; Define a type 'Bicycle' that can be either a Trek, a Bianchi, or a Gunnar
+(define-type Bicycle (U Trek Bianchi Gunnar))
+
+
+
+
+;; Q5
+;; Assuming the definitions of Trek, Bianchi, Gunnar, and Bicycle from the previous discussion
+
+;; Function: only-treks
+;; Purpose: Consumes a list of bicycles and returns a list containing only the Treks.
+;; Type: (Listof Bicycle) -> (Listof Trek)
+(define (only-treks [bicycles : (Listof Bicycle)]) : (Listof Trek)
+  (cond
+    [(empty? bicycles) '()]  
+    [else
+     (let ([first-bike (first bicycles)]
+           [rest-bikes (rest bicycles)])
+       (if (Trek? first-bike)
+           (cons first-bike (only-treks rest-bikes)) 
+           (only-treks rest-bikes)))]))
+
+;; Define the test bicycle instances
+(define trek1 (make-Trek 2))
+(define trek2 (make-Trek 3))
+(define bianchi1 (make-Bianchi 4))
+(define gunnar1 (make-Gunnar 5))
+
+(define mixed-bicycles (list trek1 bianchi1 gunnar1 trek2))
+(define no-trek-bicycles (list bianchi1 gunnar1))
+
+;; Helper function to extract num-wheels from a list of Trek bikes
+(define (get-num-wheels-list [bikes : (Listof Trek)]) : (Listof Number)
+  (map Trek-num-wheels bikes))
+
+;; Test Case 1: Check if only Treks are returned from a mixed list
+(check-equal? (get-num-wheels-list (only-treks mixed-bicycles))
+              (get-num-wheels-list (list trek1 trek2))
+              "Test with mixed bicycle types: Should return only Treks")
+
+;; Test Case 2: Check if no Treks result in an empty list
+(check-equal? (only-treks no-trek-bicycles) 
+              '()
+              "Test with no Trek bicycles: Should return an empty list")
+
+
+
+;; Q6
+;; Function: only-bianchis
+;; Purpose: Consumes a list of bicycles and returns a list containing only the Bianchis.
+;; Type: (Listof Bicycle) -> (Listof Bianchi)
+(define (only-bianchis [bicycles : (Listof Bicycle)]) : (Listof Bianchi)
+  (cond
+    [(empty? bicycles) '()]
+    [(Bianchi? (first bicycles))
+     (cons (first bicycles) (only-bianchis (rest bicycles)))]
+    [else (only-bianchis (rest bicycles))]))
+
+
+
+;; More define
+(define bianchi2 (make-Bianchi 5))
+(define no-bianchi-bicycles (list trek1 gunnar1))
+
+;; Test Case 1: Check if only Bianchis are returned from a mixed list
+(check-equal? (map Bianchi-num-wheels (only-bianchis mixed-bicycles))
+              (list 4)
+              "Test with mixed bicycle types: Should return only Bianchis")
+
+;; Test Case 2: Check if no Bianchis result in an empty list
+(check-equal? (only-bianchis no-bianchi-bicycles) 
+              '()
+              "Test with no Bianchi bicycles: Should return an empty list")
+
+
+
+;; Q7
+
+(define (onlyThese [bicycles : (Listof Bicycle)] [predicate : (-> Bicycle Boolean)]) : (Listof Bicycle)
+  (cond
+    [(empty? bicycles) '()]
+    [else
+     (let ([first-bike (first bicycles)]
+           [rest-bikes (rest bicycles)])
+       (if (predicate first-bike)
+           (cons first-bike (onlyThese rest-bikes predicate))  
+           (onlyThese rest-bikes predicate)))]))  
+
+(check-equal? (length (onlyThese mixed-bicycles Trek?))
+              2)
+(check-equal? (length (onlyThese mixed-bicycles Gunnar?))
+              1)
+;; Q8
+(: my-append (All [a] (Listof a) (Listof a) -> (Listof a)))
+(define (my-append lst1 lst2)
+  (cond
+    [(empty? lst1) lst2]
+    [else (cons (first lst1) (my-append (rest lst1) lst2))]))
+
+(my-append '(a b c) '(d e f))
+
+
+;; Q9
+(: my-take (All [a] (Listof a) Integer -> (Listof a)))
+(define (my-take lst n)
+  (cond
+    [(or (empty? lst) (<= n 0)) empty]
+    [else (cons (first lst) (my-take (rest lst) (- n 1)))]))
+
+(my-take '(1 2 3 4 5) 3) ;'(1 2 3)
+(my-take '(1 2 3 4 5) 0) ;'()
+(my-take '(a) 1) ;'(a)

@@ -1,0 +1,15 @@
+#lang typed/racket
+(require typed/rackunit)
+
+;; 2.3.3
+;; total-profit : number -> number
+(define (total-profit [customers : Number])
+  (- (* 5 customers) (+ 20 (* 0.5 customers))))
+
+;; test
+(check-equal? (total-profit 5) 2.5)
+(check-equal? (total-profit 10) 25.0)
+(check-equal? (total-profit 100) 430.0)
+
+
+;; 3.3.3

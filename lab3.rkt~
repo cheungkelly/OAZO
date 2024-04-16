@@ -1,0 +1,170 @@
+#lang typed/racket
+(require typed/rackunit)
+
+;; lab 3
+
+;; 000
+(: parse000 (-> Sexp Boolean))
+(define (parse000 sexp)
+  (match sexp
+    [(list (? number?) 'chris (? symbol?)) true]
+    [_ false]))
+
+(check-equal? (parse000 '(1 chris something)) #t) ; should return #t because "something" is a symbol
+(check-equal? (parse000 '(1 chris "not a symbol"))#f); should return #f because a string is not a symbol
+(check-equal? (parse000 '(not-a-number chris something))#f) ; should return #f because "not-a-number" is not a number
+(check-equal? (parse000 'chris)#f) ; should return #f because it's not a list
+
+
+
+;; 001
+(: parse001 (-> Sexp (U False Symbol)))
+(define (parse001 sexp)
+  (match sexp
+    [(list (? number?) 'chris sym) (if (symbol? sym) sym #f)] ; sym is already guaranteed to be a symbol here
+    [_ #f]))                                                  ; Return #f for all other patterns
+
+(check-equal? (parse001 '(1 chris alpha)) 'alpha)   ; Should return 'alpha because it matches the pattern
+(check-equal? (parse001 '(1 chris "not-a-symbol"))#f) ; Should return #f, because "not-a-symbol" is a string, not a symbol
+(check-equal? (parse001 '())#f)                      ; Should return #f, because it is an empty list
+
+
+;; 002
+(: all-reals? ((Listof Any) -> Boolean))
+(define (all-reals? lst)
+  (andmap real? lst))
+(: parse002 (-> Sexp (U False (Listof Real))))
+(define (parse002 sexp)
+  (match sexp
+    [(list _ reals _) 
+     (if (and (list? reals) (all-reals? reals))
+         (cast reals (Listof Real))  ; Explicitly cast to (Listof Real)
+         #f)]                        ; Return #f for anything else
+    [_ #f]))                         ; Return #f for non-matching patterns
+
+
+(check-equal? (parse002 '(anything (1.0 2.0 3.0) anything-else)) '(1.0 2.0 3.0)) ; Should return the list of real numbers
+(check-equal? (parse002 '(foo (4.5 -6.7 8.9) bar)) '(4.5 -6.7 8.9))            ; Should return the list of real numbers
+(check-equal? (parse002 '())#f)                           ; Should return #f, empty list
+(check-equal? (parse002 '(foo (1.0 "not-real" 3.0) bar))#f); Should return #f, list contains a string
+(check-equal? (parse002 '(1.0 2.0 3.0))#f)                ; Should return #f, not a list of length 3
+(check-equal? (parse002 'foo)#f)                          ; Should return #f, not a list
+
+
+;; ohno
+(: ohno (Any -> Symbol))
+(define (ohno val)
+  (if (number? val)
+      'okay
+      (error 'ohno "expected a number, got ~a" val)))
+
+
+(check-equal? (ohno 42) 'okay)  ; Should return 'okay for a number
+(check-exn (regexp (regexp-quote "ohno: expected a number, got hello"))
+           (lambda () (ohno "hello")))
+
+
+#;(;; Arith language
+(struct numC ([n : Number]) #:transparent)
+(struct plusC ([l : ArithC] [r : ArithC]) #:transparent)
+(struct multC ([l : ArithC] [r : ArithC]) #:transparent)
+(struct squareC ([expr : ArithC]) #:transparent)
+(define-type ArithC (U numC plusC multC))
+
+
+
+;; evaluation
+(: interp (ArithC -> Number))
+(define (interp [a : ArithC]) : Number
+  (match a
+    [(numC n) n]
+    [(plusC l r) (+ (interp l) (interp r))]
+    [(multC l r) (* (interp l) (interp r))]
+    )) 
+
+(check-equal? (interp (plusC (numC 3) (multC (numC 4) (numC 5)))) 23)
+(check-equal? (interp (multC (plusC (numC 1) (numC 2)) (numC 3))) 9)
+
+
+;; num-adds
+(: num-adds (ArithC -> Number))
+(define (num-adds [a : ArithC]) : Number
+  (printf "Processing: ~a\n" a)  ; Add printf here
+  (match a
+    [(numC _) 0]
+    [(plusC l r) (+ 1 (num-adds l) (num-adds r))]
+    [(multC l r) (+ (num-adds l) (num-adds r))]))
+
+(check-equal? (num-adds (numC 5)) 0)
+(check-equal? (num-adds (plusC (numC 3) (numC 4))) 1)
+(check-equal? (num-adds (multC (plusC (numC 1) (numC 2)) (plusC (numC 3) (numC 4)))) 2)
+
+
+;; num-adds parser
+(define (parse [code : Sexp]) : ArithC
+  (match code
+     [(? number? x) (numC x)] 
+     [(list '* l r) (multC (parse l)(parse r))]
+     [(list '+ l r) (plusC (parse l)(parse r))]
+     [other (error 'parse "expected valid syntax error, got ~e" other)]))
+
+(check-equal? (parse '4)(numC 4))
+(check-equal? (parse '(* (+ 1 2) 3)) (multC (plusC (numC 1) (numC 2)) (numC 3)))
+(check-exn (regexp (regexp-quote "parse: expected valid syntax error, got 'hello"))
+           (lambda () (parse 'hello)))
+
+)
+;; squareC
+(struct numC ([n : Number]) #:transparent)
+(struct plusC ([l : ArithC] [r : ArithC]) #:transparent)
+(struct multC ([l : ArithC] [r : ArithC]) #:transparent)
+(struct squareC ([expr : ArithC]) #:transparent)
+(define-type ArithC (U numC plusC multC squareC))
+
+(: interp (ArithC -> Number))
+(define (interp [a : ArithC]) : Number
+  (match a
+    [(numC n) n]
+    [(plusC l r) (+ (interp l) (interp r))]
+    [(multC l r) (* (interp l) (interp r))]
+    [(squareC e) (let ([val (interp e)]) (* val val))])) 
+
+(define (parse [code : Sexp]) : ArithC
+  (match code
+     [(? number? x) (numC x)] 
+     [(list '* l r) (multC (parse l)(parse r))]
+     [(list '+ l r) (plusC (parse l)(parse r))]
+     [(list '^2 e) (squareC (parse e))]
+     [other (error 'parse "expected valid syntax error, got ~e" other)]))
+
+(check-equal? (interp (parse '(^2 3))) 9)
+(check-equal? (interp (parse '(^2 (^2 2)))) 16)
+(check-equal? (interp (parse '(+ 2 (^2 3)))) 11)
+(check-equal? (interp (parse '(* (^2 2) (^2 3)))) 36)
+(check-exn (regexp (regexp-quote "parse: expected valid syntax error, got 'hello"))
+           (lambda () (parse 'hello)))
+
+;; top-interp
+(: top-interp (Sexp -> Number))
+(define (top-interp sexp)
+  (interp (parse sexp)))
+
+(check-equal? (top-interp 5)5)
+(check-equal? (top-interp '(+ 1 2)) 3)
+(check-exn (regexp (regexp-quote "expected valid syntax"))
+           (lambda () (top-interp '(+ 1))))
+
+;; zip
+
+(: zip (All [A B] (-> (Listof A) (Listof B) (Listof (List A B)))))
+(define (zip lst1 lst2)
+  (match* (lst1 lst2)
+    [((list) (list)) '()]
+    [((cons x xs) (cons y ys))
+     (cons (list x y) (zip xs ys))]))
+
+(check-equal? (zip '(1 2 3) '(4 5 6)) '((1 4) (2 5) (3 6)))
+(check-equal? (zip '("a" "b" "c") '("d" "e" "f")) '(("a" "d") ("b" "e") ("c" "f")))
+(check-equal? (zip '(1 "b" 3) '(4 "e" 6)) '((1 4) ("b" "e") (3 6)))
+(check-equal? (zip '() '()) '())
+(check-equal? (zip '(1) '(2)) '((1 2)))

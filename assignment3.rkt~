@@ -1,0 +1,100 @@
+#lang typed/racket
+(require typed/rackunit)
+
+
+;; Define the abstract syntax for expressions
+(define-type ExprC
+  (U NumC
+     BinopC
+     Ifleq0C
+     FuncAppC
+     VarC))
+
+;; Define a type for numbers
+(define-type NumC [NumC (n : Real)])
+
+;; Define a type for binary operations
+(define-type BinopC [BinopC (op : Symbol) (left : ExprC) (right : ExprC)])
+
+;; Define a type for conditional expressions
+(define-type Ifleq0C [Ifleq0C (test : ExprC) (then : ExprC) (else : ExprC)])
+
+;; Define a type for function applications
+(define-type FuncAppC [FuncAppC (func : Symbol) (arg : ExprC)])
+
+;; Define a type for variables
+(define-type VarC [VarC (var : Symbol)])
+
+;; Define the abstract syntax for function definitions
+(define-type FundefC [FundefC (name : Symbol) (param : Symbol) (body : ExprC)])
+
+
+
+;; Parses an s-expression into an ExprC
+(: parse (Sexp -> ExprC))
+(define (parse s)
+  (match s
+    [(list '+ x y) (BinopC '+ (parse x) (parse y))]
+    [(list '- x y) (BinopC '- (parse x) (parse y))]
+    [(list '* x y) (BinopC '* (parse x) (parse y))]
+    [(list '/ x y) (BinopC '/ (parse x) (parse y))]
+    [(list 'ifleq0? test then else) (Ifleq0C (parse test) (parse then) (parse else))]
+    [(list id arg) (FuncAppC id (parse arg))]
+    [num (NumC num)]
+    [id (VarC id)]
+    [_ (error "Unrecognized expression")]))
+
+;; Parses a function definition s-expression
+(: parse-fundef (Sexp -> FundefC))
+(define (parse-fundef s)
+  (match s
+    [(list 'func (list name param) ':' body) (FundefC name param (parse body))]
+    [_ (error "Invalid function definition")]))
+
+;; Parses a program s-expression into a list of FundefC
+(: parse-prog (Sexp -> (Listof FundefC)))
+(define (parse-prog s)
+  (match s
+    [(list rest ...) (map parse-fundef rest)]
+    [_ (error "Invalid program format")]))
+
+;; Evaluates an expression in the context of a list of function definitions
+(: interp (ExprC (Listof FundefC) -> Real))
+(define (interp exp funs)
+  (match exp
+    [(NumC n) n]
+    [(BinopC op left right)
+     (define left-val (interp left funs))
+     (define right-val (interp right funs))
+     (match op
+       ['+ (+ left-val right-val)]
+       ['- (- left-val right-val)]
+       ['* (* left-val right-val)]
+       ['/ (/ left-val right-val)]
+       [_ (error "Unsupported binary operator")])]
+    [(Ifleq0C test then else)
+     (define test-val (interp test funs))
+     (if (<= test-val 0)
+         (interp then funs)
+         (interp else funs))]
+    [(FuncAppC func arg)
+     (define arg-val (interp arg funs))
+     (define fundef (findf (lambda (f) (eq? (FundefC-name f) func)) funs))
+     (if fundef
+         (interp (FundefC-body fundef) funs)
+         (error "Function not found"))]
+    [(VarC var) (error "Unbound variable encountered")]
+    [_ (error "Unrecognized expression")]))
+
+;; Interprets the function named 'main' from the list of function definitions
+(: interp-fns ((Listof FundefC) -> Real))
+(define (interp-fns funs)
+  (let ([main-fn (findf (lambda (f) (eq? (FundefC-name f) 'main)) funs)])
+    (if main-fn
+        (interp (FundefC-body main-fn) funs)
+        (error "Main function not found"))))
+
+;; Top-level interpreter that combines parsing and evaluation
+(: top-interp (Sexp -> Real))
+(define (top-interp fun-sexps)
+  (interp-fns (parse-prog fun-sexps)))
